@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ASPNETCoreIdentityAuthentication.Authentication
 {
@@ -18,11 +19,11 @@ namespace ASPNETCoreIdentityAuthentication.Authentication
         record RevokeAllRequest(string UserId);
         record ForgotPasswordDto(string Email);
         record ResetPasswordDto(string Email, string Token, string NewPassword);
-        public static void MapRegisterUsersEndpoint(this WebApplication app)
+        public static void MapRegisterUsersEndpoint(this RouteGroupBuilder app)
         {
             // Register
 
-            app.MapPost("/api/auth/register", async (UserManager<ApplicationUser> userManager,
+            app.MapPost("register", async (UserManager<ApplicationUser> userManager,
                 RoleManager<IdentityRole> roleManager, RegisterDto dto) =>
             {
                 var user = new ApplicationUser { UserName = dto.Email, Email = dto.Email, FullName = dto.FullName };
@@ -37,10 +38,10 @@ namespace ASPNETCoreIdentityAuthentication.Authentication
                 return Results.Ok(new { message = "Registered" });
             });
         }
-        public static void MapLoginEndpoint(this WebApplication app, WebApplicationBuilder builder )
+        public static void MapLoginEndpoint(this RouteGroupBuilder app, WebApplicationBuilder builder )
         {
             // Login
-            app.MapPost("/api/auth/login", async (HttpContext http,
+            app.MapPost("login", async (HttpContext http,
                 SignInManager<ApplicationUser> signInManager,
                 UserManager<ApplicationUser> userManager,
                 ITokenService tokenSvc, LoginDto dto) =>
@@ -57,10 +58,10 @@ namespace ASPNETCoreIdentityAuthentication.Authentication
             });
         }
 
-        public static void MapRefreshEndpoint(this WebApplication app, WebApplicationBuilder builder)
+        public static void MapRefreshEndpoint(this RouteGroupBuilder app, WebApplicationBuilder builder)
         {
             // Refresh (rotate)
-            app.MapPost("/api/auth/refresh", async (HttpContext http, AuthDbContext db,
+            app.MapPost("refresh", async (HttpContext http, AuthDbContext db,
                 UserManager<ApplicationUser> userManager, ITokenService tokenSvc, RefreshRequest dto) =>
             {
                 var existing = await db.RefreshTokens
@@ -80,23 +81,24 @@ namespace ASPNETCoreIdentityAuthentication.Authentication
             });
         }
 
-        public static void MapLogoutEndpoint(this WebApplication app)
+        public static void MapLogoutEndpoint(this RouteGroupBuilder app)
         {
             // Logout (revoke a single refresh token)
-            app.MapPost("/api/auth/logout", async (AuthDbContext db, RevokeRequest dto) =>
+            app.MapPost("logout",  async (AuthDbContext db, RevokeRequest dto) =>
             {
                 var token = await db.RefreshTokens.FirstOrDefaultAsync(r => r.Token == dto.RefreshToken);
                 if (token == null) return Results.Ok(); // idempotent
                 token.RevokedAtUtc = DateTime.UtcNow;
                 await db.SaveChangesAsync();
                 return Results.Ok(new { message = "Logged out" });
-            });
+            })
+                .RequireAuthorization(new AuthorizeAttribute() { Policy= "AdminsOnly" });
         }
 
-        public static void MaprevokeAllEndpoint(this WebApplication app)
+        public static void MaprevokeAllEndpoint(this RouteGroupBuilder app)
         {
             // Revoke all tokens for user
-            app.MapPost("/api/auth/revoke-all", async (AuthDbContext db, UserManager<ApplicationUser> userManager, RevokeAllRequest dto) =>
+            app.MapPost("revoke-all", async (AuthDbContext db, UserManager<ApplicationUser> userManager, RevokeAllRequest dto) =>
             {
                 var user = await userManager.FindByIdAsync(dto.UserId);
                 if (user == null) return Results.NotFound();
@@ -108,11 +110,11 @@ namespace ASPNETCoreIdentityAuthentication.Authentication
             });
         }
 
-        public static void MapForgotPasswordEndpoint(this WebApplication app)
+        public static void MapForgotPasswordEndpoint(this RouteGroupBuilder app)
         {
 
             // Forgot Password (send reset token – return it in response for demo; in prod, email it)
-            app.MapPost("/api/auth/forgot-password", async (UserManager<ApplicationUser> userManager, ForgotPasswordDto dto) =>
+            app.MapPost("forgot-password", async (UserManager<ApplicationUser> userManager, ForgotPasswordDto dto) =>
             {
                 var user = await userManager.FindByEmailAsync(dto.Email);
                 if (user == null) return Results.Ok(); // don't reveal
@@ -123,10 +125,10 @@ namespace ASPNETCoreIdentityAuthentication.Authentication
             });
         }
 
-        public static void MapResetPasswordEndpoint(this WebApplication app)
+        public static void MapResetPasswordEndpoint(this RouteGroupBuilder app)
         {
             // Reset Password
-            app.MapPost("/api/auth/reset-password", async (UserManager<ApplicationUser> userManager, ResetPasswordDto dto) =>
+            app.MapPost("reset-password", async (UserManager<ApplicationUser> userManager, ResetPasswordDto dto) =>
             {
                 var user = await userManager.FindByEmailAsync(dto.Email);
                 if (user == null) return Results.BadRequest();
@@ -138,11 +140,11 @@ namespace ASPNETCoreIdentityAuthentication.Authentication
             });
         }
 
-        public static void MapProfileEndpoint(this WebApplication app)
+        public static void MapProfileEndpoint(this RouteGroupBuilder app)
         {
 
             // Example protected endpoint
-            app.MapGet("/api/profile", async (UserManager<ApplicationUser> userManager, ClaimsPrincipal user) =>
+            app.MapGet("profile", async (UserManager<ApplicationUser> userManager, ClaimsPrincipal user) =>
             {
                 var me = await userManager.GetUserAsync(user);
                 if (me == null) return Results.Unauthorized();

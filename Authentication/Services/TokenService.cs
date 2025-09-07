@@ -3,6 +3,7 @@ using ASPNETCoreIdentityAuthentication.Authentication.Models;
 using ASPNETCoreIdentityAuthentication.Authentication.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+//using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -53,6 +54,7 @@ namespace ASPNETCoreIdentityAuthentication.Authentication.Services
             new(JwtRegisteredClaimNames.Sub, user.Id),
             new(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
             new("name", user.FullName ?? user.UserName ?? string.Empty),
+            
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
             claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));

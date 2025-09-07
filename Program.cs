@@ -22,12 +22,20 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(opts =>
     opts.Password.RequiredLength = 6;
     opts.User.RequireUniqueEmail = true;
 })
-.AddEntityFrameworkStores<AuthDbContext>()
-.AddDefaultTokenProviders(); // for reset password & email confirm
+.AddEntityFrameworkStores<AuthDbContext>();
+//.AddRoles<IdentityRole>()
+//.AddDefaultTokenProviders(); // for reset password & email confirm
+
 
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()!;
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+
     .AddJwtBearer(o =>
     {
         o.TokenValidationParameters = new()
@@ -42,12 +50,23 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+builder.Services.AddAuthorizationBuilder()
+.AddPolicy("AdminsOnly", policy =>
+        policy
+            .RequireRole("admin")
+            //.RequireClaim(ClaimTypes.Role, "admin")
+            //.RequireClaim("Roles", "admin")
+            );
+
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<ITokenService, TokenService>();
 
 
 builder.Services.AddCors(p => p.AddDefaultPolicy(policy =>
-    policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin())); // tighten in prod
+    policy
+    .AllowAnyOrigin()
+    //.WithOrigins("http://localhost:8080")
+    .AllowAnyHeader().AllowAnyMethod())); // tighten in prod
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -66,14 +85,16 @@ app.UseAuthorization();
 
 
 app.UseHttpsRedirection();
-app.MapRegisterUsersEndpoint();
-app.MapLoginEndpoint(builder);
-app.MapRefreshEndpoint(builder);
-app.MapLogoutEndpoint();
-app.MaprevokeAllEndpoint();
-app.MapForgotPasswordEndpoint();
-app.MapResetPasswordEndpoint();
-app.MapProfileEndpoint();
+var apiGroup = app.MapGroup("/api/auth/");
+apiGroup.MapRegisterUsersEndpoint();
+apiGroup.MapLoginEndpoint(builder);
+apiGroup.MapRefreshEndpoint(builder);
+apiGroup.MapLogoutEndpoint();
+apiGroup.MaprevokeAllEndpoint();
+apiGroup.MapForgotPasswordEndpoint();
+apiGroup.MapResetPasswordEndpoint();
+var apiGroupProfile = app.MapGroup("/api/");
+apiGroupProfile.MapProfileEndpoint();
 
 //Seeding the required data.
 // Ensure the database is created
